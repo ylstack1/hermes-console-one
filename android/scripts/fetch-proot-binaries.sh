@@ -99,6 +99,12 @@ fetch_termux_pkg() {
         fi
     fi
 
+    # Fallback: some packages (e.g. proot) ship an executable binary,
+    # not a shared library. Look for any executable in bin/ or usr/bin/.
+    if [ -z "$lib_file" ] || [ ! -f "$lib_file" ]; then
+        lib_file=$(find "$extract_dir" \( -path "*/bin/*" -o -path "*/usr/bin/*" \) -type f -executable 2>/dev/null | head -1)
+    fi
+
     if [ -z "$lib_file" ] || [ ! -f "$lib_file" ]; then
         echo "    ERROR: ${out_name}.so not found in $pkg_name package"
         return 1
@@ -115,8 +121,9 @@ echo ""
 SUCCESS=0
 FAILED=0
 
-# libproot.so — the proot binary itself (Termux packages it as libproot.so)
-if fetch_termux_pkg "proot" "libproot"; then
+# libproot.so — the proot binary itself (Termux packages it as bin/proot;
+    # the fallback in fetch_termux_pkg finds executables too).
+    if fetch_termux_pkg "proot" "libproot"; then
     SUCCESS=$((SUCCESS + 1))
 else
     FAILED=$((FAILED + 1))
