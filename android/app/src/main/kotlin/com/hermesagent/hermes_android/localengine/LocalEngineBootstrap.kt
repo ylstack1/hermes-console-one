@@ -262,14 +262,14 @@ object LocalEngineBootstrap {
                     try {
                         destFile.setReadable(true, false)
                         destFile.setWritable(true, false)
-                        if ((entry.mode and 0o100) != 0) {
+                        if ((entry.mode and 0x40) != 0) {
                             destFile.setExecutable(true, false)
                         }
                     } catch (_: Exception) {}
                 }
 
                 entryCount++
-                if (entryCount % 500 == 0) {
+                if (entryCount % 500L == 0) {
                     onProgress("Extracting rootfs: ${entryCount} entries…")
                 }
             }

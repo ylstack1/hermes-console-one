@@ -86,7 +86,7 @@ class LocalEngineForegroundService : Service() {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "LocalEngineForegroundService:wake_lock"
             )
-            wakeLock?.isAcquired = true
+            wakeLock?.acquire()
         } catch (e: Exception) {
             // Wake lock not critical for operation
         }

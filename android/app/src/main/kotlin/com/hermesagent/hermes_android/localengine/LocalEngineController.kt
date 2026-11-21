@@ -53,8 +53,9 @@ class LocalEngineController private constructor(
     }
 
     private val hermesManager = LocalHermesManager(context)
+    private val threadCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private val executor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
-        Thread(r, "local-engine-${r.id}")
+        Thread(r, "local-engine-${threadCounter.incrementAndGet()}")
     }
 
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {

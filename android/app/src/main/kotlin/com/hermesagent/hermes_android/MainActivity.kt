@@ -25,6 +25,7 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import com.hermesagent.hermes_android.localengine.LocalEngineController
 import java.io.File
 import java.util.UUID
 

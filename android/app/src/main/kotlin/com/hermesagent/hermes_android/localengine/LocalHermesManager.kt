@@ -112,7 +112,7 @@ class LocalHermesManager(private val context: Context) {
             return true
         }
 
-        return processManager.runWithRetry(
+        return runWithRetry(
             maxAttempts = 3,
             baseDelayMs = 3000,
             onProgress = onProgress,
@@ -182,7 +182,7 @@ class LocalHermesManager(private val context: Context) {
         }
 
         // pip install -e '.[termux]'
-        return processManager.runWithRetry(
+        return runWithRetry(
             maxAttempts = 3,
             baseDelayMs = 3000,
             onProgress = onProgress,
