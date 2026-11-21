@@ -1,0 +1,150 @@
+name: Build Local Hermes Engine (PRoot)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: local-engine-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK with PRoot local engine
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+
+      # ── 2. System tools for proot binary fetch ───────────────────────────
+      - name: Install system tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl bsdtar xz-utils dpkg file
+
+      # ── 3. Flutter SDK (cached by action) ────────────────────────────────
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+
+      # ── 4. Java / Gradle (cached by action) ──────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@c5195299c780d43841222130be109431c2dd717b # v4.5.0
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      # ── 5. Flutter dependencies (cached via pub cache) ───────────────────
+      - name: Install Flutter dependencies
+        run: flutter pub get --enforce-lockfile
+
+      # ── 6. Generate local.properties (flutter.sdk for Gradle) ────────────
+      - name: Create local.properties
+        run: |
+          # The Flutter action installs SDK under $HOME/flutter on Linux runners
+          FLUTTER_DIR="$HOME/flutter"
+          if [ ! -d "$FLUTTER_DIR/bin" ]; then
+            # Fallback: resolve from `which flutter`
+            FLUTTER_BIN="$(which flutter)"
+            FLUTTER_DIR="$(cd "$(dirname "$FLUTTER_BIN")/.." && pwd)"
+          fi
+          echo "flutter.sdk=$FLUTTER_DIR" > android/local.properties
+          cat android/local.properties
+
+      # ── 7. Restore PRoot binaries from cache (if available) ──────────────
+      - name: Cache PRoot binaries (restore)
+        id: cache-proot
+        uses: actions/cache@c054590283093506124192305f114f9e0b66e # v4.2.0
+        with:
+          path: android/app/src/main/jniLibs/arm64-v8a/
+          key: proot-binaries-${{ runner.os }}-${{ hashFiles('android/scripts/fetch-proot-binaries.sh') }}-${{ hashFiles('android/app/build.gradle.kts') }}
+          restore-keys: |
+            proot-binaries-${{ runner.os }}-
+
+      # ── 8. Fetch PRoot binaries from Termux packages ─────────────────────
+      #    Skipped if cache hit (files already restored)
+      - name: Fetch PRoot native binaries
+        if: steps.cache-proot.outputs.cache-hit != 'true'
+        run: |
+          chmod +x android/scripts/fetch-proot-binaries.sh
+          ./android/scripts/fetch-proot-binaries.sh
+
+      # ── 9. Verify PRoot .so files are present ────────────────────────────
+      - name: Verify PRoot libraries
+        run: |
+          test -f android/app/src/main/jniLibs/arm64-v8a/libproot.so \
+            || { echo "ERROR: libproot.so missing"; exit 1; }
+          test -f android/app/src/main/jniLibs/arm64-v8a/libtalloc.so \
+            || { echo "ERROR: libtalloc.so missing"; exit 1; }
+          test -f android/app/src/main/jniLibs/arm64-v8a/libandroid-shmem.so \
+            || { echo "ERROR: libandroid-shmem.so missing"; exit 1; }
+          file android/app/src/main/jniLibs/arm64-v8a/lib*.so
+          echo "PRoot binaries OK"
+
+      # ── 10. Assemble debug APK (arm64-v8a — PRoot rootfs is arm64 only) ─
+      - name: Assemble debug APK
+        working-directory: android
+        run: |
+          ./gradlew assembleDebug \
+            --console=plain \
+            --no-daemon
+
+      # ── 11. Verify native libs are packaged in the APK ───────────────────
+      - name: Verify APK contains native libraries
+        run: |
+          unzip -l android/app/build/outputs/apk/debug/app-debug.apk \
+            | grep -E 'lib/arm64-v8a/lib' || true
+
+      # ── 12. Upload debug APK artifact ────────────────────────────────────
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-console-local-engine-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+  # ── Fast check: only fetch + verify PRoot binaries, no full build ──────
+  proroot-check:
+    name: Verify PRoot binary fetch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Install system tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl bsdtar xz-utils dpkg file
+
+      - name: Fetch PRoot native binaries
+        run: |
+          chmod +x android/scripts/fetch-proot-binaries.sh
+          ./android/scripts/fetch-proot-binaries.sh
+
+      - name: Verify all 3 .so files present
+        run: |
+          test -f android/app/src/main/jniLibs/arm64-v8a/libproot.so
+          test -f android/app/src/main/jniLibs/arm64-v8a/libtalloc.so
+          test -f android/app/src/main/jniLibs/arm64-v8a/libandroid-shmem.so
+          file android/app/src/main/jniLibs/arm64-v8a/lib*.so
+          echo "PRoot binaries OK"
