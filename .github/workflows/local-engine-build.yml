@@ -29,11 +29,13 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-      # ── 2. System tools for proot binary fetch ───────────────────────────
-      - name: Install system tools
+      # ── 2. Verify system tools (typically pre-installed on ubuntu-24.04) ───────
+      - name: Check system tools
         run: |
-          apt-get update -qq
-          apt-get install -y -qq curl bsdtar xz-utils dpkg file
+          for tool in curl tar xz dpkg file ar; do
+            command -v "$tool" >/dev/null || { echo "Missing: $tool"; exit 1; }
+          done
+          echo "System tools OK"
 
       # ── 3. Flutter SDK (cached by action) ────────────────────────────────
       - name: Set up Flutter
@@ -131,10 +133,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install system tools
+      - name: Check system tools
         run: |
-          apt-get update -qq
-          apt-get install -y -qq curl bsdtar xz-utils dpkg file
+          for tool in curl tar xz dpkg file ar; do
+            command -v "$tool" >/dev/null || { echo "Missing: $tool"; exit 1; }
+          done
+          echo "System tools OK"
 
       - name: Fetch PRoot native binaries
         run: |
