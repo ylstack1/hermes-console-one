@@ -372,6 +372,78 @@ class ConnectionManager {
     return null;
   }
 
+  // ── Motor local Hermes (PRoot + rootfs, opcional) ───────────────────────
+
+  /// ID fijo de la conexión del motor local Hermes. Siempre la misma para que
+  /// la UI pueda identificarla y el usuario no cree duplicados.
+  static const String _localConnectionId = 'local_engine';
+
+  /// Devuelve la conexión del motor local si existe y está instalada.
+  SavedConnection? getLocalConnection() {
+    for (final c in getConnections()) {
+      if (c.id == _localConnectionId) return c;
+    }
+    return null;
+  }
+
+  /// Crea (o reutiliza) la conexión `127.0.0.1:9119` para el motor local
+  /// Hermes. No requiere API key ni auth del Dashboard: el gateway local
+  /// responde en loopback sin credenciales.
+  ///
+  /// Debe llamarse después de que [LocalEngine.startHermes] haya devuelto
+  /// `true`, para que la UI pueda seleccionar la instancia local como si
+  /// fuera un servidor remoto cualquiera.
+  Future<void> ensureLocalConnection() async {
+    final existing = getLocalConnection();
+    if (existing != null) {
+      // Si ya existe, asegurar que apunte al puerto correcto y sea loopback.
+      if (existing.host != '127.0.0.1' || existing.port != 9119 ||
+          !existing.onDeviceLoopback || existing.kind != InstanceKind.localhost) {
+        await upsertConnection(existing.copyWith(
+          host: '127.0.0.1',
+          port: 9119,
+          useHttps: false,
+          kind: InstanceKind.localhost,
+          onDeviceLoopback: true,
+        ));
+      }
+      return;
+    }
+
+    await upsertConnection(SavedConnection(
+      id: _localConnectionId,
+      label: 'Motor local Hermes',
+      host: '127.0.0.1',
+      port: 9119,
+      apiKey: '',
+      useHttps: false,
+      readOnly: false,
+      gatewayAuthMode: AuthMode.none,
+      dashboardAuthMode: AuthMode.none,
+      notes: 'Conexión automática del motor local Hermes (PRoot + rootfs).',
+      onDeviceLoopback: true,
+      localChatMode: LocalChatMode.auto,
+      kind: InstanceKind.localhost,
+    ));
+  }
+
+  /// Elimina la conexión del motor local (al desinstalar el rootfs o apagar
+  /// el motor definitivamente).
+  Future<void> removeLocalConnection() async {
+    final local = getLocalConnection();
+    if (local == null) return;
+    await deleteConnection(_localConnectionId);
+  }
+
+  /// Si la conexión activa es el motor local Hermes.
+  bool isActiveLocalConnection() {
+    final id = activeConnectionId.value;
+    return id == _localConnectionId;
+  }
+
+  /// Si [connId] corresponde al motor local Hermes.
+  bool isLocalConnectionId(String? connId) => connId == _localConnectionId;
+
   /// Siembra la instancia activa con la predeterminada en el arranque en frío.
   /// Llamar una sola vez en `main()` antes de construir la app: así el home abre
   /// con la predeterminada, pero el cambio de instancia en caliente (que escribe

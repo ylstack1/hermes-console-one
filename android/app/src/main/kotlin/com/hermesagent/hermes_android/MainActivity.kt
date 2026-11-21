@@ -347,6 +347,13 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+        // ── Local Hermes engine (optional PRoot runtime) ──────────────────
+        val localEngineChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "hermes/local_engine",
+        )
+        LocalEngineController.attach(applicationContext, localEngineChannel)
+        // ──────────────────────────────────────────────────────────────────
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             foregroundRestartContractChannelName,

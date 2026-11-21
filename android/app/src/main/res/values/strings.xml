@@ -36,4 +36,10 @@
         <item quantity="one">%d automation</item>
         <item quantity="other">%d automations</item>
     </plurals>
+    <!-- Local Hermes engine (optional PRoot runtime) -->
+    <string name="local_engine_notification_channel_name">Local Hermes Engine</string>
+    <string name="local_engine_notification_channel_desc">Keeps the PRoot + Hermes Agent gateway running in the background</string>
+    <string name="local_engine_notification_title">Local Hermes Engine running</string>
+    <string name="local_engine_notification_text">PRoot container + Hermes Agent gateway active on localhost:9119</string>
+    <string name="local_engine_stop_action">Stop engine</string>
 </resources>

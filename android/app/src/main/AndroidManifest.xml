@@ -77,6 +77,10 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         tools:node="remove" />
+    <!-- Local Hermes engine (optional): keep the proot + Hermes gateway alive
+         in the background while local mode is active. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
         android:name=".HermesApplication"
         android:label="Console"
@@ -352,6 +356,12 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+        <!-- Local Hermes engine: foreground service keeps proot + Hermes gateway
+             running while the local engine switch is on. -->
+        <service
+            android:name=".localengine.LocalEngineForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
     <queries>
         <!-- Reconocedor de voz del sistema (STT). Android 11+ (API 30+) filtra la

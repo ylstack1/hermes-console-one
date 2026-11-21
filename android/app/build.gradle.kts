@@ -33,15 +33,22 @@ android {
    }
 
    defaultConfig {
-       // Identidad pública en Play (inmutable tras la primera publicación).
-       // Propia de XPeta Lab para no colisionar con el package de Nous/Hermes.
-       // El namespace interno no cambia: las clases Kotlin siguen donde están.
-       applicationId = "dev.xpetalab.hermesconsole"
-       minSdk = 24
-       targetSdk = 36
-       versionCode = flutter.versionCode
-       versionName = flutter.versionName
-   }
+	       // Identidad pública en Play (inmutable tras la primera publicación).
+	       // Propia de XPeta Lab para no colisionar con el package de Nous/Hermes.
+	       // El namespace interno no cambia: las clases Kotlin siguen donde están.
+	       applicationId = "dev.xpetalab.hermesconsole"
+	       minSdk = 24
+	       targetSdk = 36
+	       versionCode = flutter.versionCode
+	       versionName = flutter.versionName
+
+	       // PRoot + Ubuntu rootfs (optional local Hermes engine) only run on
+	       // arm64-v8a devices. The rootfs tarball contains glibc binaries for
+	       // aarch64 only.
+	       ndk {
+	           abiFilters += listOf("arm64-v8a")
+	       }
+	   }
 
    signingConfigs {
        create("release") {
@@ -80,24 +87,39 @@ android {
    }
 
    buildTypes {
-       release {
-           // La validación de tareas al final del archivo impide empaquetar una
-           // variante release sin la upload key. Nunca se degrada a firma debug.
-           signingConfig = signingConfigs.getByName("release")
-           isMinifyEnabled = true
-           isShrinkResources = true
-           // Incluye tablas de símbolos nativos en el AAB para que Play pueda
-           // simbolicar fallos de Flutter/Whisper/Sherpa/ONNX sin distribuir
-           // información de depuración en los APK instalados.
-           ndk {
-               debugSymbolLevel = "SYMBOL_TABLE"
-           }
-           proguardFiles(
-               getDefaultProguardFile("proguard-android-optimize.txt"),
-               "proguard-rules.pro",
-           )
-       }
-   }
+	       release {
+	           // La validación de tareas al final del archivo impide empaquetar una
+	           // variante release sin la upload key. Nunca se degrada a firma debug.
+	           signingConfig = signingConfigs.getByName("release")
+	           isMinifyEnabled = true
+	           isShrinkResources = true
+	           // Incluye tablas de símbolos nativos en el AAB para que Play pueda
+	           // simbolicar fallos de Flutter/Whisper/Sherpa/ONNX sin distribuir
+	           // información de depuración en los APK instalados.
+	           ndk {
+	               debugSymbolLevel = "SYMBOL_TABLE"
+	           }
+	           proguardFiles(
+	               getDefaultProguardFile("proguard-android-optimize.txt"),
+	               "proguard-rules.pro",
+	           )
+	       }
+	   }
+
+	   // PRoot native libraries (.so) must be extracted to nativeLibraryDir with
+	   // execute permission to bypass Android W^X policy. useLegacyPackaging
+	   // prevents AGP from stripping/repacking them in a way that loses the exec bit.
+	   packaging {
+	       jniLibs {
+	           useLegacyPackaging = true
+	       }
+	   }
+
+	   // Keep rootfs tarball and zip assets uncompressed so they can be
+	   // extracted at runtime directly from the APK/assets directory.
+	   androidResources {
+	       noCompress += listOf("zip", "tar.gz")
+	   }
 }
 
 kotlin {
@@ -122,6 +144,12 @@ dependencies {
    // binary, version or periodic background component.
    implementation("androidx.work:work-runtime-ktx:2.11.2")
    implementation("androidx.webkit:webkit:1.15.0")
+
+	   // PRoot optional local Hermes engine: rootfs tarball extraction.
+	   // commons-compress handles .tar.gz (Ubuntu rootfs) and .deb archives.
+	   implementation("org.apache.commons:commons-compress:1.26.0")
+	   // xz support for .deb packages inside the rootfs toolchain.
+	   implementation("org.tukaani:xz:1.9")
 }
 
 val validateReleaseSigning by tasks.registering {
