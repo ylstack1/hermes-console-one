@@ -269,7 +269,7 @@ object LocalEngineBootstrap {
                 }
 
                 entryCount++
-                if (entryCount % 500L == 0) {
+                if (entryCount % 500L == 0L) {
                     onProgress("Extracting rootfs: ${entryCount} entries…")
                 }
             }
