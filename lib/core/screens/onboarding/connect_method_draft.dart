@@ -16,7 +16,7 @@ enum ConnectRoute { direct, ssh }
 
 /// The connection entries. SSH remains available for callers opening its
 /// route directly and for orienting a draft; it has no separate method card.
-enum ConnectWay { nous, manual, ssh, scan }
+enum ConnectWay { nous, manual, ssh, scan, localEngine }
 
 /// What the person typed on the Connect form, kept by whoever shows the
 /// choice of ways so that leaving one door and opening another loses nothing.
@@ -56,6 +56,10 @@ class ConnectDraft {
       case ConnectWay.ssh:
         route = ConnectRoute.ssh;
       case ConnectWay.scan:
+        break;
+      case ConnectWay.localEngine:
+        route = ConnectRoute.direct;
+        method = ConnectMethod.password;
         break;
     }
   }

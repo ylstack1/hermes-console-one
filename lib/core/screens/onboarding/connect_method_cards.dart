@@ -46,10 +46,16 @@ class ConnectWayCards extends StatelessWidget {
 
   /// The order every entry shares: the hosted account first; the camera
   /// last because it needs a code or a server on the same network.
-  static const order = [ConnectWay.nous, ConnectWay.manual, ConnectWay.scan];
+  static const order = [
+    ConnectWay.nous,
+    ConnectWay.localEngine,
+    ConnectWay.manual,
+    ConnectWay.scan,
+  ];
 
   static IconData iconOf(ConnectWay way) => switch (way) {
     ConnectWay.nous => HIcons.account_circle_outlined,
+    ConnectWay.localEngine => HIcons.device_hub_rounded,
     ConnectWay.manual => HIcons.language_rounded,
     ConnectWay.ssh => HIcons.terminal_rounded,
     ConnectWay.scan => HIcons.qr_code_scanner_rounded,
@@ -57,6 +63,7 @@ class ConnectWayCards extends StatelessWidget {
 
   static String titleOf(Strings s, ConnectWay way) => switch (way) {
     ConnectWay.nous => s.nacWayNousTitle,
+    ConnectWay.localEngine => s.nacWayLocalTitle,
     ConnectWay.manual => s.nacWayManualTitle,
     ConnectWay.ssh => s.cnxTabSsh,
     ConnectWay.scan => s.nacWayScanTitle,
@@ -64,6 +71,7 @@ class ConnectWayCards extends StatelessWidget {
 
   static String bodyOf(Strings s, ConnectWay way) => switch (way) {
     ConnectWay.nous => s.nacWayNousBody,
+    ConnectWay.localEngine => s.nacWayLocalBody,
     ConnectWay.manual => s.nacWayManualBody,
     ConnectWay.ssh => s.nacWayManualBody,
     ConnectWay.scan => s.nacWayScanBody,

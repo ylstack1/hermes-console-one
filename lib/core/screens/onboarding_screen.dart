@@ -22,6 +22,7 @@ import '../services/model_readiness.dart';
 import '../services/native_password_login.dart';
 import '../services/onboarding_arrival.dart';
 import '../services/pairing_link.dart';
+import '../services/platform/local_engine.dart';
 import '../services/ssh_tunnel_connector.dart';
 import '../theme/app_theme.dart';
 import '../utils/transport_privacy.dart';
@@ -51,6 +52,7 @@ enum _Step {
   issue,
   duplicate,
   signIn,
+  localEngine,
   success,
 }
 
@@ -240,6 +242,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   bool _motionReady = false;
   final Season _season = seasonOf(seasonClock());
 
+  // Local engine state
+  LocalEngine? _localEngine;
+  final List<String> _localEngineLog = [];
+  String _localEngineProgress = '';
+  bool _localEngineInstalling = false;
+
   // The hero's place: measured from the current screen's slot, tweened when
   // the screen changes, followed while it scrolls.
   final GlobalKey _stageKey = GlobalKey(debugLabel: 'onboarding-stage');
@@ -327,6 +335,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
     _tick.dispose();
     _v2Pass.dispose();
+    _localEngine?.dispose();
     if (widget.connectDraft == null) _connectDraft.dispose();
     _diagnostics.close();
     _releaseSetup();
@@ -1041,6 +1050,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         unawaited(_manualConnect(way: ConnectWay.ssh));
       case ConnectWay.scan:
         unawaited(_scan());
+      case ConnectWay.localEngine:
+        unawaited(_startLocalEngine());
     }
   }
 
@@ -1055,6 +1066,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   /// The keys the welcome's doors have always had, for the two that existed.
   static Key _wayKey(ConnectWay way) => switch (way) {
     ConnectWay.manual => const ValueKey('onboarding-manual'),
+    ConnectWay.localEngine => const ValueKey('onboarding-local-engine'),
     ConnectWay.scan => const ValueKey('onboarding-scan'),
     _ => ValueKey('onboarding-way-${way.name}'),
   };
@@ -1249,6 +1261,211 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     } catch (_) {}
   }
 
+  // ── Local Hermes engine ────────────────────────────────────────────────────
+
+  /// Start the local engine: check arm64, install rootfs + Python + Hermes,
+  /// start the gateway on localhost:9119, register the local connection, then
+  /// finish onboarding.
+  Future<void> _startLocalEngine() async {
+    final s = Strings.of(context);
+    setState(() {
+      _localEngineInstalling = true;
+      _localEngineLog.clear();
+      _localEngineProgress = s.leStepCheck;
+    });
+
+    // Check arm64 first
+    if (!(await _localEngineIsArm64())) {
+      setState(() {
+        _localEngineInstalling = false;
+        _localEngineLog.add('${s.leErrorNotArm64}');
+      });
+      return;
+    }
+
+    _localEngine = LocalEngine(connManager: widget.connManager);
+
+    // Install rootfs → Python → Hermes Agent with progress logging
+    final result = await _localEngine!.installFull(onProgress: (msg) {
+      if (!mounted) return;
+      setState(() {
+        _localEngineProgress = msg;
+        _localEngineLog.add(msg);
+      });
+    });
+
+    if (!mounted) return;
+
+    if (!result.ok) {
+      setState(() {
+        _localEngineInstalling = false;
+        _localEngineLog.add(result.message ?? s.leErrorInstall.replaceAll('{error}', 'unknown'));
+      });
+      return;
+    }
+
+    // Start the Hermes gateway on localhost:9119
+    setState(() {
+      _localEngineProgress = s.leStepStart;
+    });
+
+    final started = await _localEngine!.startHermes();
+    if (!mounted) return;
+
+    if (!started) {
+      setState(() {
+        _localEngineInstalling = false;
+        _localEngineLog.add(s.leErrorStart.replaceAll('{error}', 'start failed'));
+      });
+      return;
+    }
+
+    // Register the local connection in ConnectionManager
+    await widget.connManager.ensureLocalConnection();
+
+    if (!mounted) return;
+
+    setState(() {
+      _localEngineProgress = s.leStepDone;
+      _localEngineLog.add(s.leStepDone);
+    });
+
+    // Give the UI a moment to show "done", then finish
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (mounted) {
+      await _finish(openChat: true);
+    }
+  }
+
+  /// Check whether the device CPU is arm64-v8a (required for PRoot).
+  Future<bool> _localEngineIsArm64() async {
+    if (_localEngine == null) return false;
+    return await _localEngine!.isArm64;
+  }
+
+  /// The local engine install step: progress header, log lines, and actions.
+  Widget _localEngineStep(BuildContext context) {
+    final s = Strings.of(context);
+    final c = Theme.of(context).hermes;
+    return _frame(
+      children: [
+        _slot(_Step.localEngine),
+        _rise(0, Semantics(
+          header: true,
+          child: Text(
+            s.leInstallTitle,
+            textAlign: TextAlign.center,
+            textScaler: onbTitleScaler(context),
+            style: onbTitle(c),
+          ),
+        )),
+        const SizedBox(height: HermesSpace.x3),
+        _rise(1, Padding(
+          padding: const EdgeInsets.symmetric(horizontal: HermesSpace.x4),
+          child: Text(
+            s.leInstallBody,
+            textAlign: TextAlign.center,
+            style: onbBody(c),
+          ),
+        )),
+        const SizedBox(height: HermesSpace.x6),
+        _rise(2, Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Progress line
+            Container(
+              padding: const EdgeInsets.all(HermesSpace.x3),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(HermesRadius.row),
+                border: Border.all(color: c.divider),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: _localEngineInstalling
+                            ? const CircularProgressIndicator(
+                                strokeWidth: 2,
+                              )
+                            : const Icon(Icons.check_circle,
+                                color: Colors.green, size: 20),
+                      ),
+                      const SizedBox(width: HermesSpace.x2),
+                      Expanded(
+                        child: Text(
+                          _localEngineProgress,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: c.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: HermesSpace.x2),
+                  // Log lines
+                  if (_localEngineLog.isNotEmpty)
+                    SizedBox(
+                      height: 200,
+                      child: ListView.builder(
+                        itemCount: _localEngineLog.length,
+                        itemBuilder: (_, i) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            _localEngineLog[i],
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontFamily: 'monospace',
+                              color: c.textSecondary,
+                              height: 1.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        )),
+      ],
+      footer: [
+        if (!_localEngineInstalling)
+          OnbPrimary(
+            key: const ValueKey('local-engine-retry'),
+            label: s.leRetry,
+            onTap: () {
+              setState(() {
+                _localEngineLog.clear();
+                _localEngineProgress = s.leStepCheck;
+              });
+              unawaited(_startLocalEngine());
+            },
+          ),
+        const SizedBox(height: HermesSpace.x2),
+        OnbTextButton(
+          key: const ValueKey('local-engine-remote'),
+          label: s.leUseRemoteInstead,
+          onTap: () {
+            setState(() {
+              _localEngineInstalling = false;
+              _localEngineLog.clear();
+            });
+            _go(_Step.welcome);
+          },
+        ),
+      ],
+    );
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────
 
   @override
@@ -1354,6 +1571,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       _Step.help ||
       _Step.confirm ||
       _Step.connecting ||
+      _Step.localEngine ||
       _Step.success => 1.0,
       _ => 0.4,
     };
@@ -1484,7 +1702,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   _Hero get _kind => switch (_step) {
     _Step.welcome || _Step.help || _Step.confirm => _Hero.mark,
-    _Step.connecting => _Hero.ring,
+    _Step.connecting || _Step.localEngine => _Hero.ring,
     _Step.success => _Hero.check,
     _ => _Hero.none,
   };
@@ -1683,6 +1901,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _Step.issue => _issueScreen(context, duplicate: false),
     _Step.duplicate => _issueScreen(context, duplicate: true),
     _Step.signIn => _signInScreen(context),
+    _Step.localEngine => _localEngineStep(context),
     _Step.success => _success(context),
   };
 
