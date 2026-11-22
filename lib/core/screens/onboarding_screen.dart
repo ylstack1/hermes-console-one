@@ -1279,13 +1279,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     });
 
     try {
-      // Check arm64 first (non-blocking: if the channel fails, proceed anyway)
-      final isArm64 = await _localEngineIsArm64();
-      if (!isArm64) {
-        _localEngineLog.add('${s.leStepCheck} (non-arm64 detected, proceeding anyway)');
-      } else {
-        _localEngineLog.add('${s.leStepCheck} (arm64 OK)');
-      }
+      // Non-blocking device check: proceed regardless; PRoot binary itself will
+      // fail on incompatible architectures during install with a clear error.
+      _localEngineLog.add('${s.leStepCheck}');
 
       _localEngine = LocalEngine(connManager: widget.connManager);
 
@@ -1346,12 +1342,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         _localEngineLog.add('Error: $e');
       });
     }
-  }
-
-  /// Check whether the device CPU is arm64-v8a (required for PRoot).
-  Future<bool> _localEngineIsArm64() async {
-    if (_localEngine == null) return false;
-    return await _localEngine!.isArm64;
   }
 
   /// The local engine install step: progress header, log lines, and actions.
