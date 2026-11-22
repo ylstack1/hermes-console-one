@@ -1377,7 +1377,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               padding: const EdgeInsets.all(HermesSpace.x3),
               decoration: BoxDecoration(
                 color: c.surface,
-                borderRadius: BorderRadius.circular(HermesRadius.row),
+                borderRadius: BorderRadius.circular(12.0),
                 border: Border.all(color: c.divider),
               ),
               child: Column(

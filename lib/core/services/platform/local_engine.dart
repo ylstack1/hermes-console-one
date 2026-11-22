@@ -10,7 +10,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 import '../models/connection.dart';
-import 'connection_manager.dart';
+import '../connection_manager.dart';
 
 /// Estado del motor local Hermes.
 enum LocalEngineState {
