@@ -1288,13 +1288,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       _localEngine = LocalEngine(connManager: widget.connManager);
 
       // Install rootfs → Python → Hermes Agent with progress logging.
-      // MethodChannel callbacks from Kotlin to Flutter run on the UI thread,
-      // so setState can be called directly here.
+      // MethodChannel callbacks (onProgress) run on a native background thread
+      // — marshal every setState to the UI thread via addPostFrameCallback.
       final result = await _localEngine!.installFull(onProgress: (msg) {
         if (!mounted) return;
-        setState(() {
-          _localEngineProgress = msg;
-          _localEngineLog.add(msg);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            _localEngineProgress = msg;
+            _localEngineLog.add(msg);
+          });
         });
       });
 

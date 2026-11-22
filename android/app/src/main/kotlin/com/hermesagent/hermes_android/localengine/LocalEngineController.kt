@@ -1,6 +1,8 @@
 package com.hermesagent.hermes_android.localengine
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -23,7 +25,9 @@ import io.flutter.plugin.common.MethodChannel
  *   - uninstallRootfs → remove rootfs and free space
  *
  * All long-running operations are executed on background threads to avoid
- * blocking the Flutter UI thread.
+ * blocking the Flutter UI thread. All MethodChannel responses and callbacks
+ * are marshaled to the UI thread via Handler(Looper.getMainLooper()) to
+ * avoid @UiThread violations when Dart calls setState.
  *
  * @see LocalHermesManager
  * @see LocalEngineForegroundService
@@ -53,40 +57,60 @@ class LocalEngineController private constructor(
     }
 
     private val hermesManager = LocalHermesManager(context)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val threadCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private val executor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
         Thread(r, "local-engine-${threadCounter.incrementAndGet()}")
+    }
+
+    /** Marshals [result.success] to the UI thread. */
+    private fun success(result: MethodChannel.Result, value: Any?) {
+        mainHandler.post { result.success(value) }
+    }
+
+    /** Marshals [result.error] to the UI thread. */
+    private fun error(result: MethodChannel.Result, code: String, message: String?, details: Any?) {
+        mainHandler.post { result.error(code, message, details) }
+    }
+
+    /** Marshals [result.notImplemented] to the UI thread. */
+    private fun notImplemented(result: MethodChannel.Result) {
+        mainHandler.post { result.notImplemented() }
+    }
+
+    /** Sends an onProgress message to Dart on the UI thread. */
+    private fun sendProgress(msg: String) {
+        mainHandler.post { channel.invokeMethod("onProgress", msg) }
     }
 
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "isArm64" -> {
                 val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
-                result.success(abi.startsWith("arm64"))
+                success(result, abi.startsWith("arm64"))
             }
             "isProotReady" -> {
-                result.success(hermesManager.isProotReady())
+                success(result, hermesManager.isProotReady())
             }
             "isPythonInstalled" -> {
-                result.success(hermesManager.isPythonInstalled())
+                success(result, hermesManager.isPythonInstalled())
             }
             "isHermesInstalled" -> {
-                result.success(hermesManager.isHermesInstalled())
+                success(result, hermesManager.isHermesInstalled())
             }
             "isHermesRunning" -> {
-                result.success(hermesManager.isHermesRunning())
+                success(result, hermesManager.isHermesRunning())
             }
             "installFull" -> {
-                val onProgress = { msg: String ->
-                    channel.invokeMethod("onProgress", msg)
-                }
                 executor.submit {
                     try {
-                        val ok = hermesManager.installFull(onProgress)
-                        result.success(ok)
+                        val ok = hermesManager.installFull { msg ->
+                            sendProgress(msg)
+                        }
+                        success(result, ok)
                     } catch (e: Exception) {
                         Log.e(TAG, "installFull failed", e)
-                        result.error("install_failed", e.message, null)
+                        error(result, "install_failed", e.message, null)
                     }
                 }
             }
@@ -95,13 +119,12 @@ class LocalEngineController private constructor(
                     try {
                         val ok = hermesManager.startHermes()
                         if (ok) {
-                            // Start foreground service to keep it alive
                             LocalEngineForegroundService.start(context)
                         }
-                        result.success(ok)
+                        success(result, ok)
                     } catch (e: Exception) {
                         Log.e(TAG, "startHermes failed", e)
-                        result.error("start_failed", e.message, null)
+                        error(result, "start_failed", e.message, null)
                     }
                 }
             }
@@ -109,31 +132,31 @@ class LocalEngineController private constructor(
                 executor.submit {
                     hermesManager.stopHermes()
                     LocalEngineForegroundService.stop(context)
-                    result.success(null)
+                    success(result, null)
                 }
             }
             "foregroundStart" -> {
                 LocalEngineForegroundService.start(context)
-                result.success(null)
+                success(result, null)
             }
             "foregroundStop" -> {
                 LocalEngineForegroundService.stop(context)
-                result.success(null)
+                success(result, null)
             }
             "recentOutput" -> {
-                result.success(hermesManager.getRecentOutput())
+                success(result, hermesManager.getRecentOutput())
             }
             "uninstallRootfs" -> {
                 executor.submit {
                     try {
                         val ok = LocalEngineBootstrap.uninstallRootfs(context)
-                        result.success(ok)
+                        success(result, ok)
                     } catch (e: Exception) {
-                        result.error("uninstall_failed", e.message, null)
+                        error(result, "uninstall_failed", e.message, null)
                     }
                 }
             }
-            else -> result.notImplemented()
+            else -> notImplemented(result)
         }
     }
 }
