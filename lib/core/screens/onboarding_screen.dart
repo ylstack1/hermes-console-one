@@ -1304,9 +1304,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       if (!mounted) return;
 
       if (!result.ok) {
+        final lastMsg = _localEngineLog.isNotEmpty ? _localEngineLog.last : null;
         setState(() {
           _localEngineInstalling = false;
-          _localEngineLog.add(result.message ?? s.leErrorInstall('unknown'));
+          _localEngineLog.add(lastMsg ?? result.message ?? s.leErrorInstall('unknown'));
         });
         return;
       }
