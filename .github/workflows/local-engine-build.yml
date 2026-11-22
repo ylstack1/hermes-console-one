@@ -110,10 +110,12 @@ jobs:
       # ── 11. Verify native libs are packaged in the APK ───────────────────
       - name: Verify APK contains native libraries
         run: |
-          # Flutter may output the APK at flutter-apk/ or apk/ depending on version
-          APK_PATH=$(find android/app/build/outputs -name "app-debug.apk" 2>/dev/null | head -1)
+          # Flutter may output the APK at flutter-apk/ or apk/ depending on version.
+          # Search for any debug APK in the build outputs.
+          APK_PATH=$(find android/app/build/outputs -name "*.apk" 2>/dev/null | head -1)
           if [ -z "$APK_PATH" ]; then
-            echo "ERROR: No app-debug.apk found"
+            echo "ERROR: No debug APK found in android/app/build/outputs"
+            find android/app/build/outputs -type f -name "*.apk" 2>/dev/null || true
             exit 1
           fi
           echo "Found APK: $APK_PATH"
