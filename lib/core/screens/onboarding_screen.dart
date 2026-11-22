@@ -1268,72 +1268,85 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   /// finish onboarding.
   Future<void> _startLocalEngine() async {
     final s = Strings.of(context);
+
+    // Transition to the local engine step screen so progress is visible.
+    _go(_Step.localEngine);
+
     setState(() {
       _localEngineInstalling = true;
       _localEngineLog.clear();
       _localEngineProgress = s.leStepCheck;
     });
 
-    // Check arm64 first
-    if (!(await _localEngineIsArm64())) {
-      setState(() {
-        _localEngineInstalling = false;
-        _localEngineLog.add('${s.leErrorNotArm64}');
+    try {
+      // Check arm64 first
+      final isArm64 = await _localEngineIsArm64();
+      if (!isArm64) {
+        setState(() {
+          _localEngineInstalling = false;
+          _localEngineLog.add(s.leErrorNotArm64);
+        });
+        return;
+      }
+
+      _localEngine = LocalEngine(connManager: widget.connManager);
+
+      // Install rootfs → Python → Hermes Agent with progress logging
+      final result = await _localEngine!.installFull(onProgress: (msg) {
+        if (!mounted) return;
+        setState(() {
+          _localEngineProgress = msg;
+          _localEngineLog.add(msg);
+        });
       });
-      return;
-    }
 
-    _localEngine = LocalEngine(connManager: widget.connManager);
+      if (!mounted) return;
 
-    // Install rootfs → Python → Hermes Agent with progress logging
-    final result = await _localEngine!.installFull(onProgress: (msg) {
+      if (!result.ok) {
+        setState(() {
+          _localEngineInstalling = false;
+          _localEngineLog.add(result.message ?? s.leErrorInstall('unknown'));
+        });
+        return;
+      }
+
+      // Start the Hermes gateway on localhost:9119
+      setState(() {
+        _localEngineProgress = s.leStepStart;
+      });
+
+      final started = await _localEngine!.startHermes();
+      if (!mounted) return;
+
+      if (!started) {
+        setState(() {
+          _localEngineInstalling = false;
+          _localEngineLog.add(s.leErrorStart('start failed'));
+        });
+        return;
+      }
+
+      // Register the local connection in ConnectionManager
+      await widget.connManager.ensureLocalConnection();
+
+      if (!mounted) return;
+
+      setState(() {
+        _localEngineProgress = s.leStepDone;
+        _localEngineLog.add(s.leStepDone);
+      });
+
+      // Give the UI a moment to show "done", then finish
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (mounted) {
+        await _finish(openChat: true);
+      }
+    } on Exception catch (e) {
       if (!mounted) return;
       setState(() {
-        _localEngineProgress = msg;
-        _localEngineLog.add(msg);
-      });
-    });
-
-    if (!mounted) return;
-
-    if (!result.ok) {
-      setState(() {
         _localEngineInstalling = false;
-        _localEngineLog.add(result.message ?? s.leErrorInstall('unknown'));
+        _localEngineLog.add('Error: $e');
       });
-      return;
-    }
-
-    // Start the Hermes gateway on localhost:9119
-    setState(() {
-      _localEngineProgress = s.leStepStart;
-    });
-
-    final started = await _localEngine!.startHermes();
-    if (!mounted) return;
-
-    if (!started) {
-      setState(() {
-        _localEngineInstalling = false;
-        _localEngineLog.add(s.leErrorStart('start failed'));
-      });
-      return;
-    }
-
-    // Register the local connection in ConnectionManager
-    await widget.connManager.ensureLocalConnection();
-
-    if (!mounted) return;
-
-    setState(() {
-      _localEngineProgress = s.leStepDone;
-      _localEngineLog.add(s.leStepDone);
-    });
-
-    // Give the UI a moment to show "done", then finish
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      await _finish(openChat: true);
     }
   }
 
@@ -1348,6 +1361,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final s = Strings.of(context);
     final c = Theme.of(context).hermes;
     return _frame(
+      back: true,
       children: [
         _slot(_Step.localEngine),
         _rise(0, Semantics(
@@ -1479,6 +1493,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       // and called [_back] again: an endless microtask loop (ANR on 1.3.0).
       canPop:
           (_step == _Step.welcome ||
+              _step == _Step.localEngine ||
               (widget.guided && _history.isEmpty && _step != _Step.success)) &&
           !_busy &&
           !_exiting,
