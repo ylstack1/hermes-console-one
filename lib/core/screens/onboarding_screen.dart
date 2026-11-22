@@ -1281,30 +1281,27 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     try {
       // Non-blocking device check: proceed regardless; PRoot binary itself will
       // fail on incompatible architectures during install with a clear error.
-      _setStateUi(() {
+      setState(() {
         _localEngineLog.add('${s.leStepCheck}');
       });
 
       _localEngine = LocalEngine(connManager: widget.connManager);
 
       // Install rootfs → Python → Hermes Agent with progress logging.
-      // onProgress runs on a native MethodChannel background thread — marshal
-      // every setState to the UI thread via addPostFrameCallback.
+      // MethodChannel callbacks from Kotlin to Flutter run on the UI thread,
+      // so setState can be called directly here.
       final result = await _localEngine!.installFull(onProgress: (msg) {
         if (!mounted) return;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          setState(() {
-            _localEngineProgress = msg;
-            _localEngineLog.add(msg);
-          });
+        setState(() {
+          _localEngineProgress = msg;
+          _localEngineLog.add(msg);
         });
       });
 
       if (!mounted) return;
 
       if (!result.ok) {
-        _setStateUi(() {
+        setState(() {
           _localEngineInstalling = false;
           _localEngineLog.add(result.message ?? s.leErrorInstall('unknown'));
         });
@@ -1312,7 +1309,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       }
 
       // Start the Hermes gateway on localhost:9119
-      _setStateUi(() {
+      setState(() {
         _localEngineProgress = s.leStepStart;
       });
 
@@ -1320,7 +1317,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       if (!mounted) return;
 
       if (!started) {
-        _setStateUi(() {
+        setState(() {
           _localEngineInstalling = false;
           _localEngineLog.add(s.leErrorStart('start failed'));
         });
@@ -1332,7 +1329,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
       if (!mounted) return;
 
-      _setStateUi(() {
+      setState(() {
         _localEngineProgress = s.leStepDone;
         _localEngineLog.add(s.leStepDone);
       });
@@ -1344,21 +1341,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       }
     } on Exception catch (e) {
       if (!mounted) return;
-      _setStateUi(() {
+      setState(() {
         _localEngineInstalling = false;
         _localEngineLog.add('Error: $e');
       });
     }
-  }
-
-  /// Marshals [fn] onto the Flutter UI thread via addPostFrameCallback.
-  /// MethodChannel callbacks (onProgress, installFull, etc.) run on a native
-  /// background thread; setState must be called on the UI thread.
-  void _setStateUi(VoidCallback fn) {
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(fn);
-    });
   }
 
   /// The local engine install step: progress header, log lines, and actions.
