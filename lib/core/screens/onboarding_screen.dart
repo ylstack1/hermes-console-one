@@ -1299,7 +1299,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     if (!result.ok) {
       setState(() {
         _localEngineInstalling = false;
-        _localEngineLog.add(result.message ?? s.leErrorInstall.replaceAll('{error}', 'unknown'));
+        _localEngineLog.add(result.message ?? s.leErrorInstall('unknown'));
       });
       return;
     }
@@ -1315,7 +1315,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     if (!started) {
       setState(() {
         _localEngineInstalling = false;
-        _localEngineLog.add(s.leErrorStart.replaceAll('{error}', 'start failed'));
+        _localEngineLog.add(s.leErrorStart('start failed'));
       });
       return;
     }
