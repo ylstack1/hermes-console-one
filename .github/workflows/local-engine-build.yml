@@ -110,15 +110,22 @@ jobs:
       # ── 11. Verify native libs are packaged in the APK ───────────────────
       - name: Verify APK contains native libraries
         run: |
-          unzip -l android/app/build/outputs/apk/debug/app-debug.apk \
-            | grep -E 'lib/arm64-v8a/lib' || true
+          # Flutter may output the APK at flutter-apk/ or apk/ depending on version
+          APK_PATH=$(find android/app/build/outputs -name "app-debug.apk" 2>/dev/null | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: No app-debug.apk found"
+            exit 1
+          fi
+          echo "Found APK: $APK_PATH"
+          unzip -l "$APK_PATH" | grep -E 'lib/arm64-v8a/lib' || true
+          echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
 
       # ── 12. Upload debug APK artifact ────────────────────────────────────
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: hermes-console-local-engine-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.APK_PATH }}
           retention-days: 7
 
   # ── Fast check: only fetch + verify PRoot binaries, no full build ──────
