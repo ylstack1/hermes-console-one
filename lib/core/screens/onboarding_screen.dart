@@ -1279,14 +1279,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     });
 
     try {
-      // Check arm64 first
+      // Check arm64 first (non-blocking: if the channel fails, proceed anyway)
       final isArm64 = await _localEngineIsArm64();
       if (!isArm64) {
-        setState(() {
-          _localEngineInstalling = false;
-          _localEngineLog.add(s.leErrorNotArm64);
-        });
-        return;
+        _localEngineLog.add('${s.leStepCheck} (non-arm64 detected, proceeding anyway)');
+      } else {
+        _localEngineLog.add('${s.leStepCheck} (arm64 OK)');
       }
 
       _localEngine = LocalEngine(connManager: widget.connManager);
