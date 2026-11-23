@@ -42,7 +42,10 @@ object LocalEngineBootstrap {
     // Ubuntu 24.04 base rootfs (arm64). Multiple mirrors with fallback.
     private val ROOTFS_URLS = listOf(
         "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/ubuntu-base-24.04-base-arm64.tar.gz",
-        "https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/ubuntu-base/releases/24.04/release/ubuntu-base-24.04-base-arm64.tar.gz"
+        "https://ports.ubuntu.com/ubuntu-ports/releases/24.04/release/ubuntu-base-24.04-base-arm64.tar.gz",
+        "https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/ubuntu-base/releases/24.04/release/ubuntu-base-24.04-base-arm64.tar.gz",
+        "https://mirror.rackspace.com/ubuntu-cdimage/ubuntu-base/releases/24.04/release/ubuntu-base-24.04-base-arm64.tar.gz",
+        "https://mirror.netcologne.de/ubuntu-cdimage/ubuntu-base/releases/24.04/release/ubuntu-base-24.04-base-arm64.tar.gz"
     )
 
     private const val ROOTFS_TARBALL_NAME = "ubuntu-base-24.04-base-arm64.tar.gz"
